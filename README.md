@@ -10,21 +10,20 @@ one image"* ($100 in USDC).
 
 ## The image
 
-A vintage broadsheet front page for Monday, 23 November 2026: a large
-serif masthead with ornamental rules, black ink on cream newsprint, a
-price line and a weather line, dense justified columns, and a "latest
-wires" strip. It carries **40 dated stories across 7 regions**, with
-**3 lead stories** (Ukraine sinks the Russian corvette Merkury off Libya,
-COP31 ends with no deal, Nvidia reinstates Jensen Huang as CEO).
-
-Every story was checked against real reporting (BBC, Reuters, AP,
-Al Jazeera, CNN, Ukrinform and others) on 24 November 2026; the full list
-with sources is in [NEWS.md](NEWS.md).
+A vintage broadsheet front page for Monday, 23 November 2026 -- a
+SPECIAL EDITION on Jensen Huang's return to Nvidia: a large serif
+masthead with ornamental rules, black ink on cream newsprint, a big
+halftone-style keynote picture (the chief back on stage, a giant GPU
+behind him), and the rest of the page on the impact of his return --
+stocks, crypto, the chip industry. It carries **6 dated stories**,
+all checked against real reporting (BBC, Reuters, AP, Al Jazeera,
+CNN, Ukrinform and others) on 24 November 2026; the full list with
+sources is in [NEWS.md](NEWS.md).
 
 ## How it works
 
 `main.py` is a pure Python 3 standard-library program: a hand-written PNG
-encoder, an embedded 5x7 bitmap font, and a small drawing library. It
+encoder, an embedded 5x10 bitmap font, and a small drawing library. It
 draws the whole front page at run time — no network, no assets, no
 dependencies — and writes the image to `$MAKEFUN_OUTPUT_DIR/entry.png`
 (default `/output`). Two runs write byte-identical output.

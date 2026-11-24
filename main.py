@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""The World in One Day -- 23 November 2026.
+"""The World in One Day -- 23 November 2026 (readability redesign).
 
 An old-fashioned broadsheet front page, drawn by hand in pure Python 3
-standard library: a hand-written PNG encoder, an embedded 5x7 bitmap
+standard library: a hand-written PNG encoder, an embedded 5x10 bitmap
 font, and a vintage newspaper layout -- large serif-style masthead with
 ornamental rules, black ink on cream paper, thin column rules, small-caps
-section headers, dense justified columns, a price line and a weather line.
+section headers, a price line and a weather line.
+
+This revision fixes the first version's legibility: the old 5x7 font is
+replaced by a 5x10 face (taller, narrower glyphs with real letterforms),
+word spaces are widened, every text line gets real leading, headlines
+are clearly larger than body text, and every brief is cut to one short
+line so the columns breathe instead of packing three wrapped lines.
 
 Writes the image to $MAKEFUN_OUTPUT_DIR/entry.png (default /output).
 Runs with no network. Deterministic: two runs write identical bytes.
@@ -18,65 +24,123 @@ import struct
 import zlib
 
 # ---------------------------------------------------------------- font ----
-# 5x7 bitmap font, one glyph per character: 7 rows of 5 bits ("1" = ink).
-# Authored here from scratch; all page text is set in capitals.
+# 5x10 bitmap font: 10 rows of 5 cells ("#" = ink). Taller than the usual
+# 5x7, so letters get real stems, curves and counters instead of blocks.
+# All page text is set in capitals. Authored here from scratch.
 FONT = {
-    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
-    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
-    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
-    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
-    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
-    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
-    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
-    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
-    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
-    "J": ("00111", "00010", "00010", "00010", "00010", "10010", "01100"),
-    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
-    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
-    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
-    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
-    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
-    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
-    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
-    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
-    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
-    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
-    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
-    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
-    "W": ("10001", "10001", "10001", "10101", "10101", "10101", "01010"),
-    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
-    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
-    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
-    "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
-    "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
-    "2": ("01110", "10001", "00001", "00110", "01000", "10000", "11111"),
-    "3": ("11111", "00010", "00100", "00010", "00001", "10001", "01110"),
-    "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
-    "5": ("11111", "10000", "11110", "00001", "00001", "10001", "01110"),
-    "6": ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
-    "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
-    "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
-    "9": ("01110", "10001", "10001", "01111", "00001", "00010", "01100"),
-    " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
-    ".": ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
-    ",": ("00000", "00000", "00000", "00000", "01100", "00100", "01000"),
-    ":": ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
-    ";": ("00000", "01100", "01100", "00000", "01100", "00100", "01000"),
-    "'": ("00100", "00100", "01000", "00000", "00000", "00000", "00000"),
-    "-": ("00000", "00000", "00000", "01110", "00000", "00000", "00000"),
-    "!": ("00100", "00100", "00100", "00100", "00100", "00000", "00100"),
-    "?": ("01110", "10001", "00001", "00110", "00100", "00000", "00100"),
-    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
-    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
-    "/": ("00001", "00010", "00010", "00100", "01000", "01000", "10000"),
-    "&": ("01100", "10010", "10100", "01000", "10101", "10010", "01101"),
-    "%": ("11001", "11010", "00010", "00100", "01000", "01011", "10011"),
-    "+": ("00000", "00100", "00100", "11111", "00100", "00100", "00000"),
-    "=": ("00000", "00000", "11111", "00000", "11111", "00000", "00000"),
-    '"': ("01010", "01010", "00000", "00000", "00000", "00000", "00000"),
-    "*": ("00000", "10101", "01110", "11111", "01110", "10101", "00000"),
-    "$": ("00100", "01111", "10100", "01110", "00101", "11110", "00100"),
+    "A": (".###.", "#...#", "#...#", "#...#", "#####", "#...#", "#...#",
+          "#...#", "#...#", "#...#"),
+    "B": ("####.", "#...#", "#...#", "#...#", "####.", "#...#", "#...#",
+          "#...#", "#...#", "####."),
+    "C": (".####", "#....", "#....", "#....", "#....", "#....", "#....",
+          "#....", "#....", ".####"),
+    "D": ("####.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#",
+          "#...#", "#...#", "####."),
+    "E": ("#####", "#....", "#....", "#....", "####.", "#....", "#....",
+          "#....", "#....", "#####"),
+    "F": ("#####", "#....", "#....", "#....", "####.", "#....", "#....",
+          "#....", "#....", "#...."),
+    "G": (".####", "#....", "#....", "#....", "#..##", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "H": ("#...#", "#...#", "#...#", "#...#", "#####", "#...#", "#...#",
+          "#...#", "#...#", "#...#"),
+    "I": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..",
+          "..#..", "..#..", "#####"),
+    "J": ("..###", "...#.", "...#.", "...#.", "...#.", "...#.", "...#.",
+          "#..#.", "#..#.", ".##.."),
+    "K": ("#...#", "#..#.", "#.#..", "##...", "##...", "#.#..", "#..#.",
+          "#...#", "#...#", "#...#"),
+    "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#....",
+          "#....", "#....", "#####"),
+    "M": ("#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#",
+          "#...#", "#...#", "#...#"),
+    "N": ("#...#", "##..#", "##..#", "#.#.#", "#.#.#", "#..##", "#..##",
+          "#...#", "#...#", "#...#"),
+    "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "P": ("####.", "#...#", "#...#", "#...#", "####.", "#....", "#....",
+          "#....", "#....", "#...."),
+    "Q": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#",
+          "#...#", "#.#..", "..##."),
+    "R": ("####.", "#...#", "#...#", "#...#", "####.", "#.#..", "#..#.",
+          "#...#", "#...#", "#...#"),
+    "S": (".####", "#....", "#....", "#....", ".###.", "....#", "....#",
+          "....#", "#...#", ".###."),
+    "T": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..",
+          "..#..", "..#..", "..#.."),
+    "U": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "V": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#",
+          ".#.#.", ".#.#.", "..#.."),
+    "W": ("#...#", "#...#", "#...#", "#...#", "#...#", "#...#", "#.#.#",
+          "#.#.#", "#.#.#", ".#.#."),
+    "X": ("#...#", "#...#", ".#.#.", ".#.#.", "..#..", "..#..", ".#.#.",
+          ".#.#.", "#...#", "#...#"),
+    "Y": ("#...#", "#...#", ".#.#.", ".#.#.", "..#..", "..#..", "..#..",
+          "..#..", "..#..", "..#.."),
+    "Z": ("#####", "....#", "...#.", "...#.", "..#..", "..#..", ".#...",
+          ".#...", "#....", "#####"),
+    "0": (".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "1": ("..#..", ".##..", "..#..", "..#..", "..#..", "..#..", "..#..",
+          "..#..", "..#..", ".###."),
+    "2": (".###.", "#...#", "....#", "....#", "...#.", "..#..", ".#...",
+          "#....", "#....", "#####"),
+    "3": ("####.", "....#", "....#", "....#", ".###.", "....#", "....#",
+          "....#", "#...#", ".###."),
+    "4": ("...#.", "..##.", ".#.#.", "#..#.", "#..#.", "#####", "...#.",
+          "...#.", "...#.", "...#."),
+    "5": ("#####", "#....", "#....", "####.", "....#", "....#", "....#",
+          "#...#", "#...#", ".###."),
+    "6": (".###.", "#....", "#....", "#....", "####.", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "7": ("#####", "....#", "...#.", "...#.", "..#..", "..#..", "..#..",
+          "..#..", "..#..", "..#.."),
+    "8": (".###.", "#...#", "#...#", "#...#", ".###.", "#...#", "#...#",
+          "#...#", "#...#", ".###."),
+    "9": (".###.", "#...#", "#...#", "#...#", ".####", "....#", "....#",
+          "....#", "#...#", ".###."),
+    " ": (".....", ".....", ".....", ".....", ".....", ".....", ".....",
+          ".....", ".....", "....."),
+    ".": (".....", ".....", ".....", ".....", ".....", ".....", ".....",
+          ".....", "..##.", "..##."),
+    ",": (".....", ".....", ".....", ".....", ".....", ".....", ".....",
+          ".....", "..##.", ".#..."),
+    ":": (".....", "..##.", "..##.", ".....", ".....", ".....", ".....",
+          "..##.", "..##.", "....."),
+    ";": (".....", "..##.", "..##.", ".....", ".....", ".....", ".....",
+          "..##.", "..##.", ".#..."),
+    "'": ("..#..", "..#..", ".#...", ".....", ".....", ".....", ".....",
+          ".....", ".....", "....."),
+    "-": (".....", ".....", ".....", ".....", ".###.", ".....", ".....",
+          ".....", ".....", "....."),
+    "!": ("..#..", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..",
+          ".....", "..#..", "....."),
+    "?": (".###.", "#...#", "....#", "...#.", "..#..", "..#..", ".....",
+          ".....", "..#..", "....."),
+    "(": ("...#.", "..#..", ".#...", ".#...", ".#...", ".#...", ".#...",
+          ".#...", "..#..", "...#."),
+    ")": (".#...", "..#..", "...#.", "...#.", "...#.", "...#.", "...#.",
+          "...#.", "..#..", ".#..."),
+    "/": ("....#", "....#", "...#.", "...#.", "..#..", "..#..", ".#...",
+          ".#...", "#....", "#...."),
+    "&": (".###.", "#...#", "#...#", ".#...", "#.#..", "#..#.", "#.#.#",
+          "#..#.", "#.#..", ".##.#"),
+    "%": ("##...", "##...", "..#..", "..#..", ".#...", ".#...", "#....",
+          "#....", "...##", "...##"),
+    "+": (".....", "..#..", "..#..", "..#..", ".###.", "..#..", "..#..",
+          "..#..", ".....", "....."),
+    "=": (".....", ".....", ".....", ".####", ".....", ".####", ".....",
+          ".....", ".....", "....."),
+    '"': (".#.#.", ".#.#.", ".#.#.", ".....", ".....", ".....", ".....",
+          ".....", ".....", "....."),
+    "*": (".....", ".#.#.", ".###.", "#####", ".###.", ".#.#.", ".....",
+          ".....", ".....", "....."),
+    "$": ("..#..", ".####", "#.#..", "#.#..", ".###.", "..#.#", "..#.#",
+          ".####", "..#..", "....."),
 }
+
+GLYPH_W, GLYPH_H = 5, 10
 
 # ------------------------------------------------------------- palette ----
 PAPER = (246, 239, 219)   # cream newsprint
@@ -126,8 +190,17 @@ class Page:
             self.hline(cx - span, cx + span, cy + d, color)
 
     # -- text -------------------------------------------------------------
+    def char_w(self, ch, scale, gap=1):
+        # A word space is narrower than a letter but clearly wider than
+        # the 1 px gap between letters, so words separate at a glance.
+        if ch == " ":
+            return 4 * scale + gap
+        return GLYPH_W * scale + gap
+
     def text_w(self, s, scale, gap=1):
-        return len(s) * (5 * scale + gap) - gap if s else 0
+        if not s:
+            return 0
+        return sum(self.char_w(c, scale, gap) for c in s) - gap
 
     def text(self, s, x, y, scale, color, gap=1):
         """Draw text; returns the x just past the last glyph."""
@@ -136,23 +209,29 @@ class Page:
             glyph = FONT.get(ch)
             if glyph is None:
                 raise ValueError("no glyph for %r" % ch)
-            for row in range(7):
+            cols = 4 if ch == " " else GLYPH_W
+            for row in range(GLYPH_H):
                 bits = glyph[row]
-                for col in range(5):
-                    if bits[col] == "1":
+                for col in range(cols):
+                    if bits[col] == "#":
                         self.rect(cx + col * scale, y + row * scale,
                                   scale, scale, color)
-            cx += 5 * scale + gap
+            cx += self.char_w(ch, scale, gap)
         return cx
 
     def text_c(self, s, cx, y, scale, color, gap=1):
         """Draw text centred on cx."""
-        self.text(s, cx - self.text_w(s, scale, gap) // 2, y, scale, color, gap)
+        self.text(s, cx - self.text_w(s, scale, gap) // 2, y, scale, color,
+                  gap)
 
-    def text_bold(self, s, x, y, scale, color, gap=1):
-        """Draw text twice, 1 px apart, for a bold headline face."""
+    def text_bold(self, s, x, y, scale, color, gap=1, dx=1):
+        """Draw text twice, dx px apart, for a bold headline face."""
         self.text(s, x, y, scale, color, gap)
-        self.text(s, x + 1, y, scale, color, gap)
+        self.text(s, x + dx, y, scale, color, gap)
+
+    def text_c_bold(self, s, cx, y, scale, color, gap=1, dx=1):
+        self.text_bold(s, cx - self.text_w(s, scale, gap) // 2, y, scale,
+                       color, gap, dx)
 
     def wrap(self, s, max_chars):
         """Greedy word wrap into lines of at most max_chars characters."""
@@ -198,8 +277,11 @@ def write_png(page, path):
 # the first draft brief got wrong were dropped: the Nepal earthquake and
 # the Shenzhou-24 crew unveiling both happened on 24 November, not the
 # 23rd. Two aggregator-only claims (a Shenzhen summit; 258 House seats)
-# were dropped as unverified. Headlines fit one 26-character line;
-# briefs fit two 26-character lines at scale 2.
+# were dropped as unverified.
+#
+# Readability rule for this revision: every headline fits one line and
+# every brief fits one line at scale 2 in a 312 px column (at most 28
+# characters). Briefs are cut to their sharpest fact, never invented.
 
 LEADS = [
     ("UKRAINE SINKS", "RUSSIAN WARSHIP",
@@ -210,78 +292,78 @@ LEADS = [
      "CEO BACK AFTER TRUMP PRESSES BOARD.", "chip"),
 ]
 
-# (section, headline, brief)
+# (section, headline, brief) -- 29 stories in the body columns.
 BODY = [
     ("UKRAINE WAR", "KYIV REGION HIT HARD",
-     "RUSSIAN STRIKES KILL 15 IN KYIV REGION."),
+     "RUSSIAN STRIKES KILL 15."),
     ("UKRAINE WAR", "NATO MEETS ON POLAND",
-     "EMERGENCY TALKS AS MISSILES ENTER POLAND."),
+     "MISSILES ENTER POLAND."),
     ("UKRAINE WAR", "EU UNVEILS 22ND PACKAGE",
-     "60 BANKS OFF SWIFT; 70 SHIPS LISTED; CRYPTO HIT."),
+     "SWIFT CUT, SHIPS LISTED."),
     ("UKRAINE WAR", "SPARTA II HIT AT SEA",
-     "RUSSIAN CARGO SHIP HIT; FINLAND SUMMONS ENVOY."),
+     "FINLAND SUMMONS ENVOY."),
     ("UKRAINE WAR", "161 CLASHES IN A DAY",
-     "7,475 KAMIKAZE DRONES IN ONE DAY, KYIV SAYS."),
+     "7,475 DRONES IN ONE DAY."),
     ("UKRAINE WAR", "ZELENSKYY VOWS MORE",
-     "MORE SEA STRIKES VOWED AS NEW ATTACKS LOOM."),
+     "MORE SEA STRIKES VOWED."),
     ("EUROPE", "BELGIUM GROUNDED",
-     "429 FLIGHTS AXED AS STRIKE HALTS BRUSSELS AIRPORTS."),
+     "429 FLIGHTS AXED."),
     ("EUROPE", "MARBLES DEMAND RENEWED",
-     "ATHENS REOPENS MUSEUM, RENEWS CALL FOR MARBLES."),
+     "ATHENS RENEWS CALL."),
     ("EUROPE", "FIRMS WARN BRUSSELS",
-     "FIRMS URGE THE EU NOT TO CUT COMPETITIVENESS FUNDS."),
+     "DON'T CUT FUNDS, FIRMS URGE."),
     ("EUROPE", "ORBAN TO VISIT",
-     "HUNGARY'S PM HEADS FOR TRANSCARPATHIA."),
+     "HEADS FOR TRANSCARPATHIA."),
     ("EUROPE", "PROTESTS OVER PRICES",
-     "PRICE MARCHES SPREAD IN PORTUGAL, SPAIN."),
+     "MARCHES IN PORTUGAL, SPAIN."),
     ("MIDDLE EAST", "TANKERS HIT, IRAN SAYS",
-     "IRAN CLAIMS THREE TANKERS HIT MINES; UNVERIFIED."),
+     "IRAN CLAIM UNVERIFIED."),
     ("MIDDLE EAST", "US SANCTIONS TEHRAN",
-     "TREASURY TARGETS IRAN'S SHADOW BANKING NETWORK."),
+     "SHADOW BANKING HIT."),
     ("MIDDLE EAST", "SINGER FLOGGED IN QOM",
-     "SINGER, FOUR AIDES GET 74 LASHES EACH IN QOM."),
+     "74 LASHES EACH."),
     ("MIDDLE EAST", "GAZA TRUCK STRUCK",
-     "ISRAELI STRIKE KILLS THREE, WITNESSES SAY."),
+     "THREE KILLED."),
     ("MIDDLE EAST", "SETTLER ARSON CONDEMNED",
-     "EISENKOT DENOUNCES SETTLER ARSON IN THE WEST BANK."),
+     "EISENKOT DENOUNCES ARSON."),
     ("ASIA-PACIFIC", "24 DEAD IN FACTORY FIRE",
-     "24 DEAD AT A CANDY PLANT; 30 STILL MISSING."),
+     "30 STILL MISSING."),
     ("ASIA-PACIFIC", "INDIA AIDS NEPAL",
-     "NEW DELHI OFFERS $1.62BN TO FLOOD-HIT NEPAL."),
+     "$1.62BN FOR NEPAL."),
     ("ASIA-PACIFIC", "MINISTER QUITS IN SEOUL",
-     "EDUCATION MINISTER QUITS OVER EXAM-CHEATING CHAOS."),
+     "EXAM-CHEATING CHAOS."),
     ("ASIA-PACIFIC", "THAI TERM HALVED",
-     "COURT HALVES A LAWMAKER'S ROYAL-INSULT TERM."),
+     "ROYAL-INSULT TERM CUT."),
     ("ASIA-PACIFIC", "BORDER TALKS IN ARUNACHAL",
-     "INDIA, CHINA HOLD BORDER TALKS TO EASE TENSIONS."),
+     "INDIA, CHINA TALK."),
     ("AFRICA", "KENYA, CONGO RECONCILE",
-     "KENYA AND CONGO TO RESTORE FULL DIPLOMATIC TIES."),
+     "FULL TIES RESTORED."),
     ("AFRICA", "24 KILLED IN S. SUDAN",
-     "AT LEAST 24 CIVILIANS KILLED IN WARRAP STATE."),
+     "WARRAP STATE ATTACK."),
     ("AFRICA", "VILLA LOSES POWER",
-     "VILLA IN ABUJA LOSES WATER AND POWER."),
+     "WATER, POWER OUT."),
     ("AMERICAS", "AMTRAK DERAILS",
-     "TRAIN HITS A STUCK TRUCK; FOUR TAKEN TO HOSPITAL."),
+     "FOUR TAKEN TO HOSPITAL."),
     ("AMERICAS", "US WANTS CHAPO ISIDRO",
-     "US SEEKS EXTRADITION OF THE CAPTURED CARTEL BOSS."),
+     "EXTRADITION SOUGHT."),
     ("AMERICAS", "DRONES HIT POLICE BASE",
-     "DRONES HIT A BASE IN CUCUTA; 60 HOMES HIT."),
+     "60 HOMES HIT."),
     ("AMERICAS", "IOWA BLAST DELAYED",
-     "ARMY DELAYS LEAD-EXPLOSIVE BLAST AFTER OUTCRY."),
+     "ARMY DELAYS BLAST."),
     ("AMERICAS", "MEXICO, CHINA TALK TRADE",
-     "MEXICO AND CHINA AGREE A TRADE WORKING GROUP."),
+     "TRADE GROUP AGREED."),
 ]
 
-# Short wire items for the bottom strip, one line each.
+# Short wire items for the bottom strip, one line each (at most 20 chars).
 WIRES = [
-    "NASDAQ UP 6 PCT IN AI RALLY",
-    "BITCOIN DIPS THEN RECOVERS",
-    "OPENAI LAUNCHES SHIRUDO",
-    "AI LABS URGED TO SET LIMIT",
-    "OIL SLIDES TO 3-MONTH LOW",
-    "ASIAN STATES STEADY MARKET",
-    "DELTA FIXES TRAVEL GLITCH",
-    "S. AFRICA UNVEILS AI PLAN",
+    "NASDAQ UP 6 PCT",
+    "BITCOIN RECOVERS",
+    "OPENAI SHIRUDO",
+    "AI SAFETY LIMITS",
+    "OIL AT 3-MO LOW",
+    "ASIA STEADIES MKT",
+    "DELTA FIXES GLITCH",
+    "S. AFRICA AI PLAN",
 ]
 
 # -------------------------------------------------------------- icons ----
@@ -327,42 +409,48 @@ def icon_chip(p, x, y, s=1):
 
 ICONS = {"ship": icon_ship, "globe": icon_globe, "chip": icon_chip}
 
+
 # ------------------------------------------------------------- layout ----
 M = 26            # side margin inside the frame
-COLW = 316        # column width
-COLX = [M, 354, 682]
-LEAD_Y0, LEAD_Y1 = 202, 300
-BODY_Y0, BODY_Y1 = 314, 836
+COLW = 312        # body column width (18 px gutters)
+COLX = [M, 356, 686]
+LEAD_Y0 = 200
+BODY_Y0 = 348
+BODY_Y1 = 912
 
 
 def section_header(p, x, y, w, title):
+    # Rule, then the title, then a clear gap: the title is 20 px tall
+    # starting at y + 4, so the next block must not start before y + 28.
     p.hline(x, x + w - 1, y + 1, INK)
     p.text_c(title, x + w // 2, y + 4, 2, INK)
-    return y + 20
+    return y + 28
 
 
 def story_block(p, x, y, headline, brief):
+    # Headline bold at scale 2, then the brief one line below it, with
+    # real leading between the two lines and a gap to the next story.
     p.text_bold(headline, x, y, 2, INK)
-    y += 15
-    for line in p.wrap(brief, 26):
+    y += 22
+    for line in p.wrap(brief, 28):
         p.text(line, x, y, 2, INK)
-        y += 15
-    return y + 1
+        y += 24
+    return y + 2
 
 
 def draw_leads(p):
     for i, (h1, h2, brief, kind) in enumerate(LEADS):
         x = COLX[i]
-        ICONS[kind](p, x + COLW // 2 - 16, LEAD_Y0 + 2)
-        y = LEAD_Y0 + 24
-        p.text_c(h1, x + COLW // 2, y, 3, INK)
-        p.text_c(h2, x + COLW // 2, y + 21, 3, INK)
-        y += 45
-        for line in p.wrap(brief, 26):
+        ICONS[kind](p, x + COLW // 2 - 14, LEAD_Y0 + 2)
+        y = LEAD_Y0 + 26
+        p.text_c_bold(h1, x + COLW // 2, y, 3, INK)
+        p.text_c_bold(h2, x + COLW // 2, y + 32, 3, INK)
+        y += 66
+        for line in p.wrap(brief, 28):
             p.text_c(line, x + COLW // 2, y, 2, INK)
-            y += 15
+            y += 22
         if i < 2:
-            p.vline(COLX[i] + COLW + 6, LEAD_Y0, LEAD_Y1, INK)
+            p.vline(COLX[i] + COLW + 9, LEAD_Y0, LEAD_Y0 + 134, INK)
 
 
 def draw_body(p):
@@ -382,10 +470,11 @@ def draw_body(p):
 
 
 def draw_wires(p):
-    y = section_header(p, M, 852, W - 2 * M, "TECH AND WORLD - THE LATEST WIRES")
-    cols = [WIRES[0:3], WIRES[3:6], WIRES[6:8]]
+    y = section_header(p, M, 924, W - 2 * M,
+                       "TECH AND WORLD - THE LATEST WIRES")
+    cols = [WIRES[0:2], WIRES[2:4], WIRES[4:6], WIRES[6:8]]
     for col, items in enumerate(cols):
-        x = COLX[col]
+        x = M + col * 247
         yy = y
         for item in items:
             p.text(item, x, yy, 2, INK)
@@ -397,34 +486,31 @@ def draw_page():
     # Double frame, like a broadsheet's border.
     p.frame(12, 12, 1011, 1011, INK, 2)
     p.frame(19, 19, 1004, 1004, INK, 1)
-    # Top meta line: day, volume, price.
-    p.text("MONDAY", M, 30, 2, INK)
-    p.text_c("VOL. I - NO. 327", W // 2, 30, 2, INK)
-    p.text("PRICE ONE CENT", W - M - p.text_w("PRICE ONE CENT", 2), 30, 2, INK)
-    # Masthead.
-    p.text_c("THE WORLD IN ONE DAY", W // 2, 54, 8, INK)
+    # Top meta line: day, volume, price (small folio type).
+    p.text("MONDAY", M, 25, 1, INK)
+    p.text_c("VOL. I - NO. 327", W // 2, 25, 1, INK)
+    p.text("PRICE ONE CENT", W - M - p.text_w("PRICE ONE CENT", 1), 25, 1,
+           INK)
+    # Masthead: big and bold, double-struck for a blackletter feel.
+    p.text_c_bold("THE WORLD IN ONE DAY", W // 2, 38, 7, INK, gap=2, dx=2)
     # Ornamental rule with diamonds.
-    p.hline(M, W - M - 1, 122, INK, 2)
-    p.hline(M, W - M - 1, 128, INK, 1)
+    p.hline(M, W - M - 1, 114, INK, 2)
+    p.hline(M, W - M - 1, 120, INK, 1)
     for cx in (300, 512, 724):
-        p.diamond(cx, 125, 6, INK)
+        p.diamond(cx, 117, 6, INK)
     # Date line in oxblood, with flanking rules.
-    p.hline(M, 300, 152, ACCENT, 2)
-    p.hline(724, W - M - 1, 152, ACCENT, 2)
-    p.text_c("23 NOVEMBER 2026", W // 2, 140, 4, ACCENT)
+    p.hline(M, 300, 148, ACCENT, 2)
+    p.hline(724, W - M - 1, 148, ACCENT, 2)
+    p.text_c_bold("23 NOVEMBER 2026", W // 2, 128, 4, ACCENT)
     p.text_c("ALL THE NEWS OF THE DAY FROM EVERY CORNER OF THE EARTH",
-             W // 2, 174, 2, INK)
-    p.hline(M, W - M - 1, 194, INK, 2)
+             W // 2, 176, 1, INK)
+    p.hline(M, W - M - 1, 192, INK, 2)
     # Leads, body, wires.
     draw_leads(p)
-    p.hline(M, W - M - 1, 306, INK, 2)
+    p.hline(M, W - M - 1, 340, INK, 2)
     draw_body(p)
-    p.hline(M, W - M - 1, 844, INK, 1)
+    p.hline(M, W - M - 1, 918, INK, 1)
     draw_wires(p)
-    # Footer rule and line.
-    p.hline(M, W - M - 1, 956, INK, 1)
-    p.text_c("THE WORLD IN ONE DAY - 23 NOVEMBER 2026 - ALL THE NEWS IN ONE PAGE",
-             W // 2, 962, 2, INK)
     return p
 
 
